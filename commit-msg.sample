@@ -1,0 +1,73 @@
+#!/bin/sh
+#
+# An example hook script to check the commit log message.
+# Called by "git commit" with one argument, the name of the file
+# that has the commit message.  The hook should exit with non-zero
+# status after issuing an appropriate message if it wants to stop the
+# commit.  The hook is allowed to edit the commit message file.
+#
+# To enable this hook, rename this file to "commit-msg".
+
+# Uncomment the below to add a Signed-off-by line to the message.
+# Doing this in a hook is a bad idea in general, but the prepare-commit-msg
+# hook is more suited to it.
+#
+# SOB=$(git var GIT_AUTHOR_IDENT | sed -n 's/^\(.*>\).*$/Signed-off-by: \1/p')
+# grep -qs "^$SOB" "$1" || echo "$SOB" >> "$1"
+
+# This example catches duplicate Signed-off-by lines.
+
+msg_re="^(feat|fix|docs|style|refactor|perf|test|chore)(\(.+\))?: .{1,100}"
+
+filename="$1"
+lineno=0
+
+error() {
+    echo "CHECKIN STOPPED DUE TO INAPPROPRIATE LOG MESSAGE FORMATTING!"
+    echo "$1!"
+    echo -e "\n"
+    echo "Original checkin message has been stored in '.gitmessage.txt'"
+    exit 1
+}
+
+# Ignore merge commit
+merge=$(sed -n 1p "$1")
+[[ $merge =~ ^Merge? ]] && exit 0
+
+while read -r line; do
+    let lineno+=1
+    length=${#line}
+
+    # Ignore comment lines (don't count line number either)
+    [[ "$line" =~ ^\#.* ]] && continue
+
+    # Suject line tests
+    # if [[ $lineno -eq 1 ]]; then
+    # [[ $length -gt 60 ]] && error "Limit the subject line to 60 characters"
+    # [[ ! "$line" =~ ^[A-Z].*$ ]] && error "Capitalise the subject line"
+    # [[ "$line" == *. ]] && error "Do not end the subject line with a period"
+    # fi
+
+    [[ $lineno -eq 1 ]] && [[ $length -eq 0 ]] && error "The first line cann't be empty"
+
+    # Rules related to the commit message body
+    [[ $lineno -eq 2 ]] && [[ -n $line ]] && error "Separate subject from body with a blank line $lineno"
+    # [[ $lineno -gt 1 ]] && [[ $length -gt 72 ]] && error "Wrap the body at 72 characters"
+
+    [[ $lineno -eq 4 ]] && [[ -n $line ]] && error "Separate subject from body with a blank line $lineno"
+
+done <"$filename"
+
+type=$(sed -n 3p "$1")
+[[ ! $type =~ $msg_re ]] && error "Type cann't be empty or style is wronging"
+
+line5=$(sed -n 5p "$1")
+([[ $line5 =~ ^\#.* ]] || [[ ${#line5} -eq 0 ]]) && error "Body message cann't be empty"
+
+exit 0
+
+#test "" = "$(grep '^Signed-off-by: ' "$1" |
+#	 sort | uniq -c | sed -e '/^[ 	]*1[ 	]/d')" || {
+#	echo >&2 Duplicate Signed-off-by lines.
+#	exit 1
+#}
